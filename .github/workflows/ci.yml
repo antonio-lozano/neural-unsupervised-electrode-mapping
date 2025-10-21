@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies (uv)
+        run: |
+          uv sync
+
+      - name: Run tests (uv)
+        run: |
+          uv run pytest -q
+
+      - name: Smoke run demo script (uv)
+        run: |
+          uv run python scripts/run_demo.py --monkey monkey_L
+
+      - name: Verify generated outputs
+        shell: bash
+        run: |
+          PY_SCRIPT=$(cat << 'PY'
+          import sys, json, os
+          from pathlib import Path
+          run_dir = Path('results')/ 'monkey_l_lfp'
+          imgs = ['correlation_distance.png','cortex_alignment.png','visual_projection.png']
+          missing = [p for p in imgs if not (run_dir/p).exists()]
+          if missing:
+              print('Missing outputs:', ', '.join(missing))
+              sys.exit(1)
+          metrics = run_dir / 'metrics.json'
+          assert metrics.exists(), 'metrics.json missing'
+          data = json.loads(metrics.read_text())
+          assert 'umap' in data and 'metrics' in data['umap'], 'UMAP metrics missing'
+          print('OK: outputs verified')
+          PY)
+          uv run python - <<PY
+          $PY_SCRIPT
+          PY

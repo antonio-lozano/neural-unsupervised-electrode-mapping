@@ -30,7 +30,8 @@ cd neural-unsupervised-electrode-mapping
 # Install uv if needed: pipx install uv   (see https://docs.astral.sh/uv/)
 uv sync
 # No data extraction required: demo NPZ bundles are included in data/
-uv run python scripts\run_demo.py --seed 31415
+uv run python scripts\\run_demo.py --seed 31415
+# Note: using --seed ensures reproducibility but can slow UMAP; omit for fastest run
 ```
 
 The command line entry downloads nothing and relies solely on the curated assets under `data/`.
@@ -56,5 +57,6 @@ This step requires the full dataset under `data/` and the original project loade
 - Visualisation styles reuse the original Matplotlib setup to match figures in the manuscript.
 
 This separation lets the core repository evolve without breaking the reviewer demo while maximising code reuse.
+
 
 
