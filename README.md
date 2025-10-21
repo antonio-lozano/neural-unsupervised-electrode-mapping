@@ -26,25 +26,25 @@ ships with pre-generated demo bundles (NPZ files) so users do not need to regene
 ## Getting started
 
 ```powershell
-cd demo
+cd neural-unsupervised-electrode-mapping
 python -m venv .venv
 \.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-# No data extraction required: demo NPZ bundles are included in demo/data
-python demo/scripts/run_demo.py
+# No data extraction required: demo NPZ bundles are included in data
+python scripts\\run_demo.py
 # add --seed 31415 to make runs deterministic if needed
 ```
 
 > Prefer `uv`? Replace the virtualenv lines with `uv venv` and `uv pip install -r requirements.txt`.
 
-The command line entry downloads nothing and relies solely on the curated assets under `demo/data`.
+The command line entry downloads nothing and relies solely on the curated assets under `data`.
 
 ## Regenerating the demo data (optional, for maintainers)
 
 If you need to refresh the demo NPZ bundles from the full dataset, use:
 
 ```powershell
-python demo/scripts/extract_demo_data.py --monkey monkey_L --freq-band LFP
+python scripts/extract_demo_data.py --monkey monkey_L --freq-band LFP
 # swap to monkey_A and other bands if needed
 ```
 This step requires the full dataset under `data/` and the original project loaders. End users do not need this.
