@@ -7,3 +7,5 @@ seaborn>=0.12
 pandas>=2.0
 hdbscan>=0.8
 pytest>=7.4
+
+ipykernel>=6.0
