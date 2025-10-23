@@ -53,6 +53,7 @@ OPTIMIZED_WEDGE_PARAMS: Dict[str, Dict[str, float]] = {
 PREFERRED_BANDS: Tuple[str, ...] = ("LFP", "gamma", "highGamma", "beta")
 STANDARIZE_LFP = False
 EXCLUDE_V4 = False
+PIXELS_PER_DEG = 25.78  # Conversion factor for RFs from pixels to degrees
 
 @dataclass(frozen=True)
 class BandBundle:
@@ -60,6 +61,7 @@ class BandBundle:
     lfp: np.ndarray
     utah_mm: np.ndarray
     colors: np.ndarray
+    rfs: np.ndarray
 
 
 def resolve_monkey_name(alias: str) -> Tuple[str, str]:
@@ -121,6 +123,15 @@ def _wedge_params_for_monkey(monkey_alias: str) -> Dict[str, float]:
 
 
 def project_to_visual_field(points_mm: np.ndarray, monkey_alias: str) -> np.ndarray:
+    """Project cortical positions to visual field using wedge dipole model.
+    
+    Args:
+        points_mm: Cortical positions in mm (N x 2)
+        monkey_alias: Monkey identifier for parameter selection
+        
+    Returns:
+        Visual field positions in degrees (N x 2)
+    """
     params = _wedge_params_for_monkey(monkey_alias)
     vx, vy = cortex_to_visual_mapping(
         points_mm[:, 0],
@@ -130,7 +141,8 @@ def project_to_visual_field(points_mm: np.ndarray, monkey_alias: str) -> np.ndar
         params["alpha"],
         params["k"],
     )
-    return np.column_stack([vx, vy])
+    # cortex_to_visual_mapping returns tuple of arrays, need to stack and transpose
+    return np.vstack([vx, vy]).T
 
 
 def compute_metrics(monkey_alias: str, utah_mm: np.ndarray, recovered_mm: np.ndarray) -> Dict[str, float]:
@@ -205,17 +217,22 @@ def _load_band_bundle(
 
     lfp = np.asarray(results[0], dtype=np.float32)
     colors = np.asarray(results[5], dtype=np.float32)
+    rfs_raw = np.asarray(results[13], dtype=np.float32)
     utah_norm = np.asarray(results[15], dtype=np.float32)
 
+    # Scale Utah coordinates to real cortical size in mm
     scale = utah_max_px / pixels_per_mm
     utah_mm = utah_norm * scale
+    
+    # Scale RFs from pixels to degrees
+    rfs = rfs_raw / PIXELS_PER_DEG
 
     if lfp.shape[0] != utah_mm.shape[0]:
         raise RuntimeError(
             f"Channel mismatch for {freq_band}: LFP has {lfp.shape[0]}, but Utah map has {utah_mm.shape[0]}"
         )
 
-    return BandBundle(freq_band=freq_band, lfp=lfp, utah_mm=utah_mm, colors=colors)
+    return BandBundle(freq_band=freq_band, lfp=lfp, utah_mm=utah_mm, colors=colors, rfs=rfs)
 
 
 def _prune_umap_grid(full_grid: List[Dict[str, float]], max_combos: int, num_electrodes: int) -> List[Dict[str, float]]:
@@ -341,33 +358,25 @@ def main() -> None:
     )
 
     best_embedding = best_candidate["embedding"]
-    try:
-        _, _, _, R_m, s_m, norm1_m, norm2_m, mean1_m, mean2_m = scipy_Antonio_procrustes(
-            mds_aligned, best_embedding
-        )
-        umap_aligned_mds = rescale_procrustes_map(best_embedding, R_m, s_m, norm1_m, norm2_m, mean1_m, mean2_m)
-    except Exception as exc:  # pragma: no cover - diagnostic fallback
-        print(f"MDS alignment failed ({exc}); falling back to direct cortex alignment.")
-        umap_aligned_mds = align_to_cortex(reference_bundle.utah_mm, best_embedding)
-
-    umap_metrics = compute_metrics(monkey_alias, reference_bundle.utah_mm, umap_aligned_mds)
-    print("UMAP metrics via MDS transfer")
-    for name, value in umap_metrics.items():
-        print(f"  {name:>14}: {value:0.4f}")
-
+    
+    # Align UMAP directly to ground truth using Procrustes
+    print("\nAligning best UMAP to ground truth cortical positions...")
     try:
         _, _, _, R_gt, s_gt, norm1_gt, norm2_gt, mean1_gt, mean2_gt = scipy_Antonio_procrustes(
             reference_bundle.utah_mm, best_embedding
         )
-        umap_aligned_gt = rescale_procrustes_map(
+        umap_aligned = rescale_procrustes_map(
             best_embedding, R_gt, s_gt, norm1_gt, norm2_gt, mean1_gt, mean2_gt
         )
-        umap_gt_metrics = compute_metrics(monkey_alias, reference_bundle.utah_mm, umap_aligned_gt)
-        print("UMAP metrics via direct cortex alignment")
-        for name, value in umap_gt_metrics.items():
-            print(f"  {name:>14}: {value:0.4f}")
-    except Exception as exc:  # pragma: no cover - diagnostic fallback
-        print(f"Direct cortex alignment failed: {exc}")
+        print("✓ UMAP aligned to ground truth via Procrustes")
+    except Exception as exc:
+        print(f"Warning: Procrustes alignment failed ({exc}); using raw UMAP embedding.")
+        umap_aligned = best_embedding
+
+    umap_metrics = compute_metrics(monkey_alias, reference_bundle.utah_mm, umap_aligned)
+    print("UMAP metrics (aligned to ground truth)")
+    for name, value in umap_metrics.items():
+        print(f"  {name:>14}: {value:0.4f}")
 
     top_candidates = sorted(candidate_scores, key=lambda item: item["score"])[:5]
     print("Top parameter sets (sorted by score):")
@@ -384,10 +393,11 @@ def main() -> None:
         monkey_alias=monkey_alias,
         monkey_actual=monkey_actual,
         utah_mm=reference_bundle.utah_mm,
+        rfs=reference_bundle.rfs,
         colors=reference_bundle.colors,
         mds_aligned=mds_aligned,
         mds_metrics=mds_metrics,
-        umap_aligned=umap_aligned_mds,
+        umap_aligned=umap_aligned,
         umap_metrics=umap_metrics,
         best_candidate=best_candidate,
     )
@@ -397,6 +407,7 @@ def plot_results(
     monkey_alias: str,
     monkey_actual: str,
     utah_mm: np.ndarray,
+    rfs: np.ndarray,
     colors: np.ndarray,
     mds_aligned: np.ndarray,
     mds_metrics: Dict[str, float],
@@ -404,25 +415,25 @@ def plot_results(
     umap_metrics: Dict[str, float],
     best_candidate: Dict[str, Any],
 ) -> None:
-    """Generate and save comparison plots for MDS and UMAP results."""
+    """Generate and save comparison plots for MDS and UMAP results with ground truth RFs."""
     
     # Create figures directory
     figures_dir = REPO_ROOT / "figures"
     figures_dir.mkdir(exist_ok=True)
     
-    # Project to visual field
+    # Project cortical positions to visual field
     utah_visual = project_to_visual_field(utah_mm, monkey_alias)
     mds_visual = project_to_visual_field(mds_aligned, monkey_alias)
     umap_visual = project_to_visual_field(umap_aligned, monkey_alias)
     
-    # Create 2x3 subplot figure
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12), dpi=150)
+    # Create 2x4 subplot figure (cortical + visual field, with RFs column)
+    fig, axes = plt.subplots(2, 4, figsize=(24, 12), dpi=150)
     
     # Row 1: Cortical space
     # Plot 1: Ground truth cortical positions
     ax = axes[0, 0]
     ax.scatter(utah_mm[:, 0], utah_mm[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title('Ground Truth Cortical Positions', fontsize=14, fontweight='bold')
+    ax.set_title('Ground Truth\nCortical Positions', fontsize=14, fontweight='bold')
     ax.set_xlabel('X (mm)', fontsize=12)
     ax.set_ylabel('Y (mm)', fontsize=12)
     ax.set_aspect('equal')
@@ -432,7 +443,7 @@ def plot_results(
     # Plot 2: MDS recovered cortical positions
     ax = axes[0, 1]
     ax.scatter(mds_aligned[:, 0], mds_aligned[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title(f'MDS Recovered (Cortical)\nIEDC={mds_metrics["cortical_corr"]:.3f}, RMSE={mds_metrics["cortical_rmse"]:.2f}mm', 
+    ax.set_title(f'MDS Recovered\nIEDC={mds_metrics["cortical_corr"]:.3f}, RMSE={mds_metrics["cortical_rmse"]:.2f}mm', 
                  fontsize=14, fontweight='bold')
     ax.set_xlabel('X (mm)', fontsize=12)
     ax.set_ylabel('Y (mm)', fontsize=12)
@@ -443,7 +454,7 @@ def plot_results(
     # Plot 3: UMAP recovered cortical positions
     ax = axes[0, 2]
     ax.scatter(umap_aligned[:, 0], umap_aligned[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    title_text = (f'UMAP Recovered (Cortical)\n'
+    title_text = (f'UMAP Recovered\n'
                   f'{best_candidate["freq_band"]}, n={best_candidate["n_neighbors"]}, d={best_candidate["min_dist"]:.1f}\n'
                   f'IEDC={umap_metrics["cortical_corr"]:.3f}, RMSE={umap_metrics["cortical_rmse"]:.2f}mm')
     ax.set_title(title_text, fontsize=14, fontweight='bold')
@@ -453,6 +464,17 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
+    # Plot 4: Ground truth RFs (cortical space for comparison)
+    ax = axes[0, 3]
+    ax.scatter(rfs[:, 0], rfs[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title('Ground Truth RFs\n(Visual Field)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (px)', fontsize=12)
+    ax.set_ylabel('Y (px)', fontsize=12)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    ax.invert_yaxis()  # RFs typically have inverted Y axis
+    
     # Row 2: Visual field space
     # Compute shared visual field limits
     all_visual_x = np.concatenate([utah_visual[:, 0], mds_visual[:, 0], umap_visual[:, 0]])
@@ -460,10 +482,10 @@ def plot_results(
     visual_xlim = (all_visual_x.min() - 0.5, all_visual_x.max() + 0.5)
     visual_ylim = (all_visual_y.min() - 0.5, all_visual_y.max() + 0.5)
     
-    # Plot 4: Ground truth visual field
+    # Plot 5: Ground truth visual field (from cortex projection)
     ax = axes[1, 0]
     ax.scatter(utah_visual[:, 0], utah_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title('Ground Truth Visual Field', fontsize=14, fontweight='bold')
+    ax.set_title('Ground Truth\n(Projected to Visual Field)', fontsize=14, fontweight='bold')
     ax.set_xlabel('X (deg)', fontsize=12)
     ax.set_ylabel('Y (deg)', fontsize=12)
     ax.set_xlim(visual_xlim)
@@ -472,10 +494,10 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 5: MDS recovered visual field
+    # Plot 6: MDS recovered visual field
     ax = axes[1, 1]
     ax.scatter(mds_visual[:, 0], mds_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title(f'MDS Recovered (Visual Field)\nIEDC={mds_metrics["visual_corr"]:.3f}, RMSE={mds_metrics["visual_rmse"]:.2f}°', 
+    ax.set_title(f'MDS Recovered\nIEDC={mds_metrics["visual_corr"]:.3f}, RMSE={mds_metrics["visual_rmse"]:.2f}°', 
                  fontsize=14, fontweight='bold')
     ax.set_xlabel('X (deg)', fontsize=12)
     ax.set_ylabel('Y (deg)', fontsize=12)
@@ -485,15 +507,33 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 6: UMAP recovered visual field
+    # Plot 7: UMAP recovered visual field
     ax = axes[1, 2]
     ax.scatter(umap_visual[:, 0], umap_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title(f'UMAP Recovered (Visual Field)\nIEDC={umap_metrics["visual_corr"]:.3f}, RMSE={umap_metrics["visual_rmse"]:.2f}°', 
+    ax.set_title(f'UMAP Recovered\nIEDC={umap_metrics["visual_corr"]:.3f}, RMSE={umap_metrics["visual_rmse"]:.2f}°', 
                  fontsize=14, fontweight='bold')
     ax.set_xlabel('X (deg)', fontsize=12)
     ax.set_ylabel('Y (deg)', fontsize=12)
     ax.set_xlim(visual_xlim)
     ax.set_ylim(visual_ylim)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    
+    # Plot 8: Ground truth RFs (normalized for visual field comparison)
+    ax = axes[1, 3]
+    # Normalize RFs to similar scale as visual field projections
+    rfs_normalized = rfs.copy()
+    # Center and scale RFs for better comparison
+    rfs_normalized = rfs_normalized - rfs_normalized.mean(axis=0)
+    rfs_scale = np.ptp(rfs_normalized, axis=0).max()
+    visual_scale = max(np.ptp(all_visual_x), np.ptp(all_visual_y))
+    if rfs_scale > 0:
+        rfs_normalized = rfs_normalized * (visual_scale / rfs_scale)
+    ax.scatter(rfs_normalized[:, 0], rfs_normalized[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title('Ground Truth RFs\n(Normalized)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (normalized)', fontsize=12)
+    ax.set_ylabel('Y (normalized)', fontsize=12)
     ax.set_aspect('equal')
     ax.grid(False)
     ax.set_facecolor('white')
