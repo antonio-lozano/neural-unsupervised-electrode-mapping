@@ -164,10 +164,11 @@ def compute_metrics(monkey_alias: str, utah_mm: np.ndarray, recovered_mm: np.nda
 
 
 def fast_umap_grid(num_electrodes: int) -> List[Dict[str, float]]:
-    n_neighbors_values = list(range(150, num_electrodes + 1, 150))
+    n_neighbors_values = list(range(150, num_electrodes + 1, 400))
     if not n_neighbors_values:
         fallback = max(2, num_electrodes // 3)
-        n_neighbors_values = [min(max(fallback, 2), max(num_electrodes - 1, 2))]
+        #n_neighbors_values = [min(max(fallback, 2), max(num_electrodes - 1, 2))]
+        n_neighbors_values = [200]
     min_dist_values = [0.1, 0.9]
     return [
         {"n_neighbors": float(n), "min_dist": float(d)}
@@ -421,10 +422,23 @@ def plot_results(
     figures_dir = REPO_ROOT / "figures"
     figures_dir.mkdir(exist_ok=True)
     
-    # Project cortical positions to visual field
+    # Project cortical positions to visual field (deg)
     utah_visual = project_to_visual_field(utah_mm, monkey_alias)
-    mds_visual = project_to_visual_field(mds_aligned, monkey_alias)
-    umap_visual = project_to_visual_field(umap_aligned, monkey_alias)
+    mds_visual_raw = project_to_visual_field(mds_aligned, monkey_alias)
+    umap_visual_raw = project_to_visual_field(umap_aligned, monkey_alias)
+
+    # For visualization only: align projected maps to measured RFs in the visual field
+    # This removes arbitrary rotation/scale introduced by projection and aids comparison
+    try:
+        _, _, _, Rv_mds, sv_mds, n1_mds, n2_mds, m1_mds, m2_mds = scipy_Antonio_procrustes(rfs, mds_visual_raw)
+        mds_visual = rescale_procrustes_map(mds_visual_raw, Rv_mds, sv_mds, n1_mds, n2_mds, m1_mds, m2_mds)
+    except Exception:
+        mds_visual = mds_visual_raw
+    try:
+        _, _, _, Rv_umap, sv_umap, n1_umap, n2_umap, m1_umap, m2_umap = scipy_Antonio_procrustes(rfs, umap_visual_raw)
+        umap_visual = rescale_procrustes_map(umap_visual_raw, Rv_umap, sv_umap, n1_umap, n2_umap, m1_umap, m2_umap)
+    except Exception:
+        umap_visual = umap_visual_raw
     
     # Create 2x4 subplot figure (cortical + visual field, with RFs column)
     fig, axes = plt.subplots(2, 4, figsize=(24, 12), dpi=150)
@@ -478,8 +492,12 @@ def plot_results(
     # Compute shared visual field limits INCLUDING the ground truth RFs
     all_visual_x = np.concatenate([rfs[:, 0], utah_visual[:, 0], mds_visual[:, 0], umap_visual[:, 0]])
     all_visual_y = np.concatenate([rfs[:, 1], utah_visual[:, 1], mds_visual[:, 1], umap_visual[:, 1]])
-    visual_xlim = (all_visual_x.min() - 0.5, all_visual_x.max() + 0.5)
-    visual_ylim = (all_visual_y.min() - 0.5, all_visual_y.max() + 0.5)
+    span_x = float(all_visual_x.max() - all_visual_x.min())
+    span_y = float(all_visual_y.max() - all_visual_y.min())
+    margin_x = max(0.05 * span_x, 0.25)
+    margin_y = max(0.05 * span_y, 0.25)
+    visual_xlim = (all_visual_x.min() - margin_x, all_visual_x.max() + margin_x)
+    visual_ylim = (all_visual_y.min() - margin_y, all_visual_y.max() + margin_y)
     
     # Plot 5: Ground truth RFs (measured visual field positions)
     ax = axes[1, 0]
@@ -493,7 +511,7 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 6: MDS recovered visual field
+    # Plot 6: MDS recovered visual field (aligned to RFs for visualization)
     ax = axes[1, 1]
     ax.scatter(mds_visual[:, 0], mds_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
     ax.set_title(f'MDS Recovered\nIEDC={mds_metrics["visual_corr"]:.3f}, RMSE={mds_metrics["visual_rmse"]:.2f}°', 
@@ -506,7 +524,7 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 7: UMAP recovered visual field
+    # Plot 7: UMAP recovered visual field (aligned to RFs for visualization)
     ax = axes[1, 2]
     ax.scatter(umap_visual[:, 0], umap_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
     ax.set_title(f'UMAP Recovered\nIEDC={umap_metrics["visual_corr"]:.3f}, RMSE={umap_metrics["visual_rmse"]:.2f}°', 
