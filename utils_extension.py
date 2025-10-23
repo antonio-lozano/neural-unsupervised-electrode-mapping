@@ -346,8 +346,26 @@ def _load_data_core(monkey: str, STANDARIZE_LFP: bool, EXCLUDE_V4: bool, base_pa
     anchor_utah = utah[anchor_indices]
     anchor_utah_distances = euclidean_distances(anchor_utah)
 
+    # Remove nonvalid electrodes from utah and rfs
     utah_clean = np.delete(utah, nonvalid_e, axis=0)
     rfs_clean = np.delete(rfs, nonvalid_e, axis=0)
+    
+    # Check if LFP already has nonvalid electrodes removed
+    # The file may already be cleaned (696 channels) or full (1024 channels)
+    if LFP.shape[0] == utah.shape[0]:
+        # LFP has same size as original utah (1024), need to clean it
+        LFP_clean = np.delete(LFP, nonvalid_e, axis=0)
+        print(f"[loader:{window}] Removed {len(nonvalid_e)} nonvalid electrodes from LFP: {LFP.shape[0]} -> {LFP_clean.shape[0]}")
+    elif LFP.shape[0] == utah_clean.shape[0]:
+        # LFP already cleaned, same size as utah_clean
+        LFP_clean = LFP
+        print(f"[loader:{window}] LFP already has nonvalid electrodes removed ({LFP.shape[0]} channels)")
+    else:
+        raise RuntimeError(
+            f"LFP channel count mismatch: LFP has {LFP.shape[0]} channels, "
+            f"but expected either {utah.shape[0]} (full) or {utah_clean.shape[0]} (cleaned)"
+        )
+    
     rfs_distances = euclidean_distances(rfs_clean)
     utah_distances = euclidean_distances(utah_clean)
     if utah_distances.max() > 0:
@@ -362,7 +380,7 @@ def _load_data_core(monkey: str, STANDARIZE_LFP: bool, EXCLUDE_V4: bool, base_pa
     colors_w_alpha = np.vstack(colors_w_alpha)
 
     return {
-        'LFP': LFP,
+        'LFP': LFP_clean,
         'MUABINNED': MUABINNED,
         'anchorLFP': anchor_lfp,
         'anchorUtah': anchor_utah,
