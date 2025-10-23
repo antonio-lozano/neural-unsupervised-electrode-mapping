@@ -164,12 +164,25 @@ def compute_metrics(monkey_alias: str, utah_mm: np.ndarray, recovered_mm: np.nda
 
 
 def fast_umap_grid(num_electrodes: int) -> List[Dict[str, float]]:
-    n_neighbors_values = list(range(150, num_electrodes + 1, 400))
-    if not n_neighbors_values:
-        fallback = max(2, num_electrodes // 3)
-        #n_neighbors_values = [min(max(fallback, 2), max(num_electrodes - 1, 2))]
-        n_neighbors_values = [200]
-    min_dist_values = [0.1, 0.9]
+    """Build a small, valid UMAP hyperparameter grid.
+
+    Rules:
+    - Ensure 2 <= n_neighbors < num_electrodes (or < 3 fallback)
+    - Provide a compact set of min_dist values {0.1, 0.5, 0.9}
+    - Scale choices with dataset size while keeping the grid tiny for speed
+    """
+    if num_electrodes <= 3:
+        n_neighbors_values = [2]
+    elif num_electrodes < 150:
+        # Use a mid-scale neighbor count that stays strictly below num_electrodes
+        n_neighbors_values = [min(num_electrodes - 1, max(2, num_electrodes // 2))]
+    else:
+        # Favor a higher neighborhood; include 550 only when available
+        n_neighbors_values = [150]
+        if num_electrodes > 550:
+            n_neighbors_values.append(550)
+
+    min_dist_values = [0.1, 0.5, 0.9]
     return [
         {"n_neighbors": float(n), "min_dist": float(d)}
         for n in n_neighbors_values
@@ -427,23 +440,10 @@ def plot_results(
     mds_visual_raw = project_to_visual_field(mds_aligned, monkey_alias)
     umap_visual_raw = project_to_visual_field(umap_aligned, monkey_alias)
 
-    # For visualization only: align projected maps to measured RFs in the visual field
-    # This removes arbitrary rotation/scale introduced by projection and aids comparison
-    try:
-        _, _, _, Rv_utah, sv_utah, n1_utah, n2_utah, m1_utah, m2_utah = scipy_Antonio_procrustes(rfs, utah_visual_raw)
-        utah_visual = rescale_procrustes_map(utah_visual_raw, Rv_utah, sv_utah, n1_utah, n2_utah, m1_utah, m2_utah)
-    except Exception:
-        utah_visual = utah_visual_raw
-    try:
-        _, _, _, Rv_mds, sv_mds, n1_mds, n2_mds, m1_mds, m2_mds = scipy_Antonio_procrustes(rfs, mds_visual_raw)
-        mds_visual = rescale_procrustes_map(mds_visual_raw, Rv_mds, sv_mds, n1_mds, n2_mds, m1_mds, m2_mds)
-    except Exception:
-        mds_visual = mds_visual_raw
-    try:
-        _, _, _, Rv_umap, sv_umap, n1_umap, n2_umap, m1_umap, m2_umap = scipy_Antonio_procrustes(rfs, umap_visual_raw)
-        umap_visual = rescale_procrustes_map(umap_visual_raw, Rv_umap, sv_umap, n1_umap, n2_umap, m1_umap, m2_umap)
-    except Exception:
-        umap_visual = umap_visual_raw
+    # Cortex-first pipeline: use direct VF projections (no visual-field alignment)
+    utah_visual = utah_visual_raw
+    mds_visual = mds_visual_raw
+    umap_visual = umap_visual_raw
     
     # Create 2x4 subplot figure (cortical + visual field, with RFs column)
     fig, axes = plt.subplots(2, 4, figsize=(24, 12), dpi=150)
@@ -510,7 +510,7 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 6: MDS recovered visual field (aligned to RFs for visualization)
+    # Plot 6: MDS recovered visual field (direct projection from cortex-aligned MDS)
     ax = axes[1, 1]
     ax.scatter(mds_visual[:, 0], mds_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
     ax.set_title(f'MDS Recovered\nIEDC={mds_metrics["visual_corr"]:.3f}, RMSE={mds_metrics["visual_rmse"]:.2f}°', 
@@ -523,7 +523,7 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 7: UMAP recovered visual field (aligned to RFs for visualization)
+    # Plot 7: UMAP recovered visual field (direct projection from cortex-aligned UMAP)
     ax = axes[1, 2]
     ax.scatter(umap_visual[:, 0], umap_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
     ax.set_title(f'UMAP Recovered\nIEDC={umap_metrics["visual_corr"]:.3f}, RMSE={umap_metrics["visual_rmse"]:.2f}°', 
@@ -536,8 +536,8 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 8: Ground truth cortical positions projected to visual field (aligned to RFs)
-    # This should match the RFs if the wedge dipole model is accurate
+    # Plot 8: Ground truth cortical positions projected to visual field (direct)
+    # This should approximate the RFs if the wedge dipole model is accurate
     ax = axes[1, 3]
     ax.scatter(utah_visual[:, 0], utah_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
     # Calculate RMSE between projected ground truth and measured RFs
