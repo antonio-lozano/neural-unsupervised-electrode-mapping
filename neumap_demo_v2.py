@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
+from config_loader import load_config, get_data_paths  # noqa: E402
 from cortex_model_utils import cortex_to_visual_mapping  # noqa: E402
 from utils import (  # noqa: E402
     calculate_corr_of_distances,
@@ -28,6 +29,16 @@ from utils_extension import (  # noqa: E402
     load_monkey_data_band_15seconds,
 )
 
+# Load configuration
+try:
+    CONFIG = load_config()
+    DATA_PATHS = get_data_paths(CONFIG)
+except Exception as e:
+    print(f"Warning: Could not load config.yaml ({e}). Using default paths.")
+    CONFIG = None
+    DATA_PATHS = None
+
+
 WindowType = Literal["15s", "full"]
 
 FREQ_BANDS: Tuple[str, ...] = ("LFP", "low", "alpha", "beta", "gamma", "highGamma")
@@ -39,7 +50,6 @@ OPTIMIZED_WEDGE_PARAMS: Dict[str, Dict[str, float]] = {
 PREFERRED_BANDS: Tuple[str, ...] = ("LFP", "gamma", "highGamma", "beta")
 STANDARIZE_LFP = False
 EXCLUDE_V4 = False
-
 
 @dataclass(frozen=True)
 class BandBundle:
@@ -72,7 +82,7 @@ def run_mds(distance_matrix: np.ndarray, random_state: int | None) -> np.ndarray
     kwargs: Dict[str, Any] = {
         "n_components": 2,
         "dissimilarity": "precomputed",
-        "n_init": 8,
+        "n_init": 4,
         "max_iter": 400,
     }
     if random_state is not None:
@@ -91,8 +101,9 @@ def run_umap_embedding(lfp: np.ndarray, n_neighbors: int, min_dist: float, rando
         "min_dist": float(min_dist),
         "init": pca_init,
     }
-    if random_state is not None:
-        kwargs["random_state"] = random_state
+    # Don't set random_state to enable parallelism (faster)
+    # if random_state is not None:
+    #     kwargs["random_state"] = random_state
     reducer = UMAP(**kwargs)
     return reducer.fit_transform(lfp)
 
@@ -151,11 +162,20 @@ def fast_umap_grid(num_electrodes: int) -> List[Dict[str, float]]:
 
 
 def _data_paths() -> Tuple[str, str, str, str]:
-    base_path = str(REPO_ROOT / "data" / "EYES_CLOSED")
-    utah_path = str(REPO_ROOT / "data" / "coordinates_of_electrodes_on_cortex_using_photos_of_arrays")
-    channel_map = str(REPO_ROOT / "data" / "channel_area_mapping" / "channel_area_mapping.mat")
-    delete_path = str(REPO_ROOT / "data" / "deletedElectrodesDictionary")
+    if DATA_PATHS is not None:
+        # Use paths from config.yaml
+        base_path = DATA_PATHS['eyes_closed_data']
+        utah_path = DATA_PATHS['utah_coordinates']
+        channel_map = DATA_PATHS['channel_area_mapping']
+        delete_path = DATA_PATHS['deleted_electrodes']
+    else:
+        # Fallback to default paths (relative to repo root)
+        base_path = str(REPO_ROOT / "data" / "EYES_CLOSED")
+        utah_path = str(REPO_ROOT / "data" / "coordinates_of_electrodes_on_cortex_using_photos_of_arrays")
+        channel_map = str(REPO_ROOT / "data" / "channel_area_mapping" / "channel_area_mapping.mat")
+        delete_path = str(REPO_ROOT / "data" / "deletedElectrodesDictionary")
     return base_path, utah_path, channel_map, delete_path
+
 
 
 def _load_band_bundle(
