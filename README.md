@@ -42,13 +42,13 @@ Performance vs time analysis with visual field projection.
 **Usage:**
 ```bash
 # Default: Random sampling with optimized wedge parameters
-python review_performance_vs_time_VF.py
+uv run python review_performance_vs_time_VF.py
 
 # Force run analysis
-python review_performance_vs_time_VF.py --do-analysis
+uv run python review_performance_vs_time_VF.py --do-analysis
 
 # Skip analysis and just generate plots from existing results
-python review_performance_vs_time_VF.py --no-analysis
+uv run python review_performance_vs_time_VF.py --no-analysis
 ```
 
 #### `review_visual_field_projection.py` (464 lines)
@@ -68,7 +68,7 @@ Visual field projection analysis with comprehensive visualization.
 **Usage:**
 ```bash
 # Run with optimized parameters (default, recommended)
-python review_visual_field_projection.py
+uv run python review_visual_field_projection.py
 
 # Optimize wedge parameters (set flag in script)
 # Use literature values (set flag in script)
@@ -180,15 +180,52 @@ data/
 
 ## Installation
 
-Required dependencies:
-- numpy
-- matplotlib
-- scikit-learn
-- umap-learn
-- scipy
-- pandas
-- hdbscan
-- seaborn
+This project uses [UV](https://docs.astral.sh/uv/) for fast, reliable Python package management.
+
+### Setup with UV
+
+1. **Install UV** (if not already installed):
+   ```bash
+   # Windows (PowerShell)
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   
+   # macOS/Linux
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   uv sync
+   ```
+
+### Running Scripts with UV
+
+Use `uv run` to execute any Python script with the project's dependencies:
+
+```bash
+# Run the main demo
+uv run python neumap_demo_v2.py
+
+# Run performance analysis
+uv run python review_performance_vs_time_VF.py
+
+# Run visual field projection analysis
+uv run python review_visual_field_projection.py
+
+# Run tests
+uv run pytest tests/
+```
+
+### Required Dependencies
+
+- numpy>=1.21.0
+- matplotlib>=3.4.0
+- scikit-learn>=1.0.0
+- umap-learn>=0.5.0
+- scipy>=1.7.0
+- pandas>=1.3.0
+- hdbscan>=0.8.0
+- seaborn>=0.11.0
 
 ## Research Context
 
