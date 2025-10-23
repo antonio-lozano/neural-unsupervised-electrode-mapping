@@ -168,7 +168,7 @@ def fast_umap_grid(num_electrodes: int) -> List[Dict[str, float]]:
     if not n_neighbors_values:
         fallback = max(2, num_electrodes // 3)
         n_neighbors_values = [min(max(fallback, 2), max(num_electrodes - 1, 2))]
-    min_dist_values = [0.1, 0.5, 0.9]
+    min_dist_values = [0.1, 0.9]
     return [
         {"n_neighbors": float(n), "min_dist": float(d)}
         for n in n_neighbors_values
@@ -464,28 +464,27 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 4: Ground truth RFs (cortical space for comparison)
+    # Plot 4: Ground truth RFs (visual field measured)
     ax = axes[0, 3]
     ax.scatter(rfs[:, 0], rfs[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title('Ground Truth RFs\n(Visual Field)', fontsize=14, fontweight='bold')
-    ax.set_xlabel('X (px)', fontsize=12)
-    ax.set_ylabel('Y (px)', fontsize=12)
+    ax.set_title('Ground Truth RFs\n(Measured Visual Field)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (deg)', fontsize=12)
+    ax.set_ylabel('Y (deg)', fontsize=12)
     ax.set_aspect('equal')
     ax.grid(False)
     ax.set_facecolor('white')
-    ax.invert_yaxis()  # RFs typically have inverted Y axis
     
     # Row 2: Visual field space
-    # Compute shared visual field limits
-    all_visual_x = np.concatenate([utah_visual[:, 0], mds_visual[:, 0], umap_visual[:, 0]])
-    all_visual_y = np.concatenate([utah_visual[:, 1], mds_visual[:, 1], umap_visual[:, 1]])
+    # Compute shared visual field limits INCLUDING the ground truth RFs
+    all_visual_x = np.concatenate([rfs[:, 0], utah_visual[:, 0], mds_visual[:, 0], umap_visual[:, 0]])
+    all_visual_y = np.concatenate([rfs[:, 1], utah_visual[:, 1], mds_visual[:, 1], umap_visual[:, 1]])
     visual_xlim = (all_visual_x.min() - 0.5, all_visual_x.max() + 0.5)
     visual_ylim = (all_visual_y.min() - 0.5, all_visual_y.max() + 0.5)
     
-    # Plot 5: Ground truth visual field (from cortex projection)
+    # Plot 5: Ground truth RFs (measured visual field positions)
     ax = axes[1, 0]
-    ax.scatter(utah_visual[:, 0], utah_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title('Ground Truth\n(Projected to Visual Field)', fontsize=14, fontweight='bold')
+    ax.scatter(rfs[:, 0], rfs[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title('Ground Truth RFs\n(Measured Visual Field)', fontsize=14, fontweight='bold')
     ax.set_xlabel('X (deg)', fontsize=12)
     ax.set_ylabel('Y (deg)', fontsize=12)
     ax.set_xlim(visual_xlim)
@@ -520,20 +519,19 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 8: Ground truth RFs (normalized for visual field comparison)
+    # Plot 8: Ground truth cortical positions projected to visual field
+    # This should match the RFs if the wedge dipole model is accurate
     ax = axes[1, 3]
-    # Normalize RFs to similar scale as visual field projections
-    rfs_normalized = rfs.copy()
-    # Center and scale RFs for better comparison
-    rfs_normalized = rfs_normalized - rfs_normalized.mean(axis=0)
-    rfs_scale = np.ptp(rfs_normalized, axis=0).max()
-    visual_scale = max(np.ptp(all_visual_x), np.ptp(all_visual_y))
-    if rfs_scale > 0:
-        rfs_normalized = rfs_normalized * (visual_scale / rfs_scale)
-    ax.scatter(rfs_normalized[:, 0], rfs_normalized[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
-    ax.set_title('Ground Truth RFs\n(Normalized)', fontsize=14, fontweight='bold')
-    ax.set_xlabel('X (normalized)', fontsize=12)
-    ax.set_ylabel('Y (normalized)', fontsize=12)
+    ax.scatter(utah_visual[:, 0], utah_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    # Calculate RMSE between projected ground truth and measured RFs
+    projection_rmse = float(np.sqrt(mean_squared_error(utah_visual, rfs)))
+    projection_corr = float(calculate_corr_of_distances(utah_visual, rfs))
+    ax.set_title(f'GT Cortex → Visual Field\nRMSE vs RFs={projection_rmse:.2f}°, corr={projection_corr:.3f}', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (deg)', fontsize=12)
+    ax.set_ylabel('Y (deg)', fontsize=12)
+    ax.set_xlim(visual_xlim)
+    ax.set_ylim(visual_ylim)
     ax.set_aspect('equal')
     ax.grid(False)
     ax.set_facecolor('white')
