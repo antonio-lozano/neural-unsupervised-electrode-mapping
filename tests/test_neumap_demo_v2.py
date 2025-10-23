@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from neumap_demo import neumap_demo_v2 as demo_v2
+import neumap_demo_v2 as demo_v2
 
 
 def test_resolve_monkey_name_variants() -> None:

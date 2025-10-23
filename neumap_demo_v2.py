@@ -12,21 +12,18 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics.pairwise import euclidean_distances
 from umap import UMAP
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-CODE_ROOT = REPO_ROOT / "code"
+REPO_ROOT = Path(__file__).resolve().parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
-if str(CODE_ROOT) not in sys.path:
-    sys.path.append(str(CODE_ROOT))
 
-from code.cortex_model_utils import cortex_to_visual_mapping  # noqa: E402
-from code.utils import (  # noqa: E402
+from cortex_model_utils import cortex_to_visual_mapping  # noqa: E402
+from utils import (  # noqa: E402
     calculate_corr_of_distances,
     get_monkey_pixPerMM_utahMax,
     rescale_procrustes_map,
     scipy_Antonio_procrustes,
 )
-from code.utils_extension import (  # noqa: E402
+from utils_extension import (  # noqa: E402
     load_monkey_data_band,
     load_monkey_data_band_15seconds,
 )
