@@ -198,6 +198,20 @@ This project uses [UV](https://docs.astral.sh/uv/) for fast, reliable Python pac
    uv sync
    ```
 
+3. **Configure data paths**:
+   
+   Edit `config.yaml` to point to your data directory:
+   ```yaml
+   # Update the data_root path to your local data directory
+   data_root: "C:/Users/Usuario/LFP-RFs/data"
+   ```
+   
+   The configuration file specifies paths to:
+   - `eyes_closed_data` - LFP and MUA recordings during eyes-closed condition
+   - `utah_coordinates` - Electrode array position data  
+   - `channel_area_mapping` - Channel-to-cortical-area mapping
+   - `deleted_electrodes` - Invalid electrode information
+
 ### Running Scripts with UV
 
 Use `uv run` to execute any Python script with the project's dependencies:
