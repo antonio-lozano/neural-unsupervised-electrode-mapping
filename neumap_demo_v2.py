@@ -423,12 +423,17 @@ def plot_results(
     figures_dir.mkdir(exist_ok=True)
     
     # Project cortical positions to visual field (deg)
-    utah_visual = project_to_visual_field(utah_mm, monkey_alias)
+    utah_visual_raw = project_to_visual_field(utah_mm, monkey_alias)
     mds_visual_raw = project_to_visual_field(mds_aligned, monkey_alias)
     umap_visual_raw = project_to_visual_field(umap_aligned, monkey_alias)
 
     # For visualization only: align projected maps to measured RFs in the visual field
     # This removes arbitrary rotation/scale introduced by projection and aids comparison
+    try:
+        _, _, _, Rv_utah, sv_utah, n1_utah, n2_utah, m1_utah, m2_utah = scipy_Antonio_procrustes(rfs, utah_visual_raw)
+        utah_visual = rescale_procrustes_map(utah_visual_raw, Rv_utah, sv_utah, n1_utah, n2_utah, m1_utah, m2_utah)
+    except Exception:
+        utah_visual = utah_visual_raw
     try:
         _, _, _, Rv_mds, sv_mds, n1_mds, n2_mds, m1_mds, m2_mds = scipy_Antonio_procrustes(rfs, mds_visual_raw)
         mds_visual = rescale_procrustes_map(mds_visual_raw, Rv_mds, sv_mds, n1_mds, n2_mds, m1_mds, m2_mds)
@@ -489,15 +494,9 @@ def plot_results(
     ax.set_facecolor('white')
     
     # Row 2: Visual field space
-    # Compute shared visual field limits INCLUDING the ground truth RFs
-    all_visual_x = np.concatenate([rfs[:, 0], utah_visual[:, 0], mds_visual[:, 0], umap_visual[:, 0]])
-    all_visual_y = np.concatenate([rfs[:, 1], utah_visual[:, 1], mds_visual[:, 1], umap_visual[:, 1]])
-    span_x = float(all_visual_x.max() - all_visual_x.min())
-    span_y = float(all_visual_y.max() - all_visual_y.min())
-    margin_x = max(0.05 * span_x, 0.25)
-    margin_y = max(0.05 * span_y, 0.25)
-    visual_xlim = (all_visual_x.min() - margin_x, all_visual_x.max() + margin_x)
-    visual_ylim = (all_visual_y.min() - margin_y, all_visual_y.max() + margin_y)
+    # Fixed axis limits in degrees (as requested)
+    visual_xlim = (-10.0, 10.0)
+    visual_ylim = (-10.0, 10.0)
     
     # Plot 5: Ground truth RFs (measured visual field positions)
     ax = axes[1, 0]
@@ -537,7 +536,7 @@ def plot_results(
     ax.grid(False)
     ax.set_facecolor('white')
     
-    # Plot 8: Ground truth cortical positions projected to visual field
+    # Plot 8: Ground truth cortical positions projected to visual field (aligned to RFs)
     # This should match the RFs if the wedge dipole model is accurate
     ax = axes[1, 3]
     ax.scatter(utah_visual[:, 0], utah_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
