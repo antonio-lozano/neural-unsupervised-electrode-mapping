@@ -1,0 +1,203 @@
+# Neural Unsupervised Electrode Mapping
+
+Neural mapping analysis using dimensionality reduction techniques for primate electrophysiology data. This repository contains tools for reconstructing electrode positions from neural activity patterns and projecting them to visual field coordinates.
+
+## Repository Contents
+
+### Main Python Files
+
+#### `neumap_demo_v2.py` (373 lines)
+Neural mapping demo using dimensionality reduction (MDS + UMAP).
+
+**Features:**
+- Loads monkey electrophysiology data
+- Performs electrode mapping reconstruction
+- Evaluates cortical and visual field metrics
+- Uses optimized wedge dipole parameters for each monkey
+
+**Key Functions:**
+- `resolve_monkey_name()` - Handles monkey identifier aliases
+- `correlation_distance_matrix()` - Computes correlation-based distances
+- `run_mds()` - Multidimensional Scaling embedding
+- `run_umap_embedding()` - UMAP dimensionality reduction
+- `align_to_cortex()` - Procrustes alignment to ground truth
+- `project_to_visual_field()` - Cortical to visual field projection
+- `compute_metrics()` - Evaluation metrics (IEDC, RMSE)
+
+#### `review_performance_vs_time_VF.py` (1771 lines)
+Performance vs time analysis with visual field projection.
+
+**Features:**
+- Tests PCA, UMAP, and MDS across different time windows
+- Supports both random sampling and continuous chunk sampling
+- Generates plots and saves results
+- Includes within-array performance metrics
+
+**Configuration Flags:**
+- `USE_CONTINUOUS_CHUNKS` - Sampling strategy (random vs continuous)
+- `GENERATE_EXAMPLES` - Save example maps for visualization
+- `USE_LITERATURE_VALUES` - Wedge parameter mode selection
+- `DO_ANALYSIS_DEFAULT` - Control analysis execution
+
+**Usage:**
+```bash
+# Default: Random sampling with optimized wedge parameters
+python review_performance_vs_time_VF.py
+
+# Force run analysis
+python review_performance_vs_time_VF.py --do-analysis
+
+# Skip analysis and just generate plots from existing results
+python review_performance_vs_time_VF.py --no-analysis
+```
+
+#### `review_visual_field_projection.py` (464 lines)
+Visual field projection analysis with comprehensive visualization.
+
+**Features:**
+- UMAP embedding with multiple runs to find best alignment
+- Procrustes alignment of cortical positions
+- Wedge dipole parameter optimization (optional)
+- Comprehensive visualization of cortical to visual field mapping
+
+**Wedge Parameter Modes:**
+1. **OPTIMIZE_WEDGE_PARAMETERS = True** - Runs optimization to find best parameters
+2. **USE_LITERATURE_VALUES = True** - Uses original literature values (a=0.61, b=106, k=13.6, alpha=0.86)
+3. **Default mode (both flags = False)** - Loads previously optimized parameters
+
+**Usage:**
+```bash
+# Run with optimized parameters (default, recommended)
+python review_visual_field_projection.py
+
+# Optimize wedge parameters (set flag in script)
+# Use literature values (set flag in script)
+```
+
+#### `utils.py` (4424 lines)
+Core utility functions for data loading, processing, and analysis.
+
+**Key Functionality:**
+- SNR, MUA, and LFP data loading
+- Procrustes alignment functions
+- Array separation and indexing utilities
+- Signal processing (filtering, binning)
+- Electrode position handling
+
+**Main Functions:**
+- `load_SNR_instances_openEyes()` - Load SNR instances from LFP responses
+- `load_MUA_instances()` - Load MUA (Multi-Unit Activity) data
+- `load_valid_rfs()` - Load receptive field locations
+- `load_valid_utahLocations()` - Load Utah array electrode positions
+- `scipy_Antonio_procrustes()` - Custom Procrustes alignment
+- `calculate_corr_of_distances()` - Compute distance correlation (IEDC)
+- `separate_arrays_fromIndex()` - Separate data by electrode arrays
+
+#### `utils_extension.py` (465 lines)
+Extended data loading utilities with enhanced path resolution.
+
+**Features:**
+- Handles both full and 15-second data windows
+- Frequency band loading (LFP, alpha, beta, gamma, highGamma)
+- Path resolution and file handling
+- Maintains compatibility with existing scripts
+
+**Main Functions:**
+- `load_monkey_data_band()` - Load full-duration band-specific data
+- `load_monkey_data_band_15seconds()` - Load trimmed 15-second data chunk
+- `_normalize_frequency()` - Standardize frequency band names
+- `_resolve_condition_root()` - Auto-detect data directory structure
+
+### Test Files
+
+#### `tests/test_neumap_demo.py`
+Tests for the original demo script.
+- Validates grid pruning logic
+- Checks script execution
+- Requires demo dataset
+
+#### `tests/test_neumap_demo_v2.py`
+Tests for neumap_demo_v2.py.
+- Validates monkey name resolution
+- Tests UMAP grid generation
+- Tests correlation distance matrix properties
+
+## Key Features
+
+### Dimensionality Reduction
+- **PCA** - Principal Component Analysis
+- **UMAP** - Uniform Manifold Approximation and Projection
+- **MDS** - Multidimensional Scaling
+
+### Monkey Data Support
+- **LICK** (Monkey L) - 16 arrays
+- **ASHTON** (Monkey A) - 16 arrays
+
+### Frequency Bands
+- `LFP` - Local Field Potential (original)
+- `low` - Low frequency
+- `alpha` - Alpha band
+- `beta` - Beta band
+- `gamma` - Gamma band
+- `highGamma` - High gamma band
+
+### Visual Field Projection
+- Cortex-to-visual field mapping using wedge dipole model
+- Optimized wedge parameters for each monkey:
+  - **LICK**: a=0.5251, b=80.0, k=13.64, alpha=0.774
+  - **ASHTON**: a=0.6857, b=106.0, k=16.69, alpha=0.948
+- Literature values: a=0.61, b=106, k=13.6, alpha=0.86
+
+### Performance Evaluation
+- **IEDC** - Inter-Electrode Distance Correlation
+- **RMSE** - Root Mean Squared Error
+- Metrics computed in both cortical space (mm) and visual field space (degrees)
+
+### Flexible Data Loading
+- Full recording duration
+- 15-second windows
+- Random subsampling
+- Continuous chunk sampling
+
+## Data Structure
+
+The code expects data organized in the following structure:
+```
+data/
+├── EYES_CLOSED/
+│   ├── LICK/
+│   │   ├── RFS/
+│   │   ├── LFP/
+│   │   └── MUA/
+│   └── ASHTON/
+│       ├── RFS/
+│       ├── LFP/
+│       └── MUA/
+├── coordinates_of_electrodes_on_cortex_using_photos_of_arrays/
+├── channel_area_mapping/
+└── deletedElectrodesDictionary/
+```
+
+## Installation
+
+Required dependencies:
+- numpy
+- matplotlib
+- scikit-learn
+- umap-learn
+- scipy
+- pandas
+- hdbscan
+- seaborn
+
+## Research Context
+
+This repository is designed for neural electrode mapping and visual field analysis in primate electrophysiology experiments. The code reconstructs electrode positions from neural activity patterns using unsupervised learning techniques and validates them against ground truth cortical positions and receptive field measurements.
+
+## Author
+
+Antonio Lozano
+
+## License
+
+See repository for license information.
