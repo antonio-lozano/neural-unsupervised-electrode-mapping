@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Tuple
 
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.manifold import MDS
 from sklearn.metrics import mean_squared_error
@@ -374,6 +377,137 @@ def main() -> None:
             f"min_dist={candidate['min_dist']:.2f} score={candidate['score']:.4f} "
             f"corr={candidate['surrogate_corr']:.4f} rmse={candidate['surrogate_rmse']:.4f}"
         )
+
+    # Generate and save plots
+    print("\nGenerating plots...")
+    plot_results(
+        monkey_alias=monkey_alias,
+        monkey_actual=monkey_actual,
+        utah_mm=reference_bundle.utah_mm,
+        colors=reference_bundle.colors,
+        mds_aligned=mds_aligned,
+        mds_metrics=mds_metrics,
+        umap_aligned=umap_aligned_mds,
+        umap_metrics=umap_metrics,
+        best_candidate=best_candidate,
+    )
+
+
+def plot_results(
+    monkey_alias: str,
+    monkey_actual: str,
+    utah_mm: np.ndarray,
+    colors: np.ndarray,
+    mds_aligned: np.ndarray,
+    mds_metrics: Dict[str, float],
+    umap_aligned: np.ndarray,
+    umap_metrics: Dict[str, float],
+    best_candidate: Dict[str, Any],
+) -> None:
+    """Generate and save comparison plots for MDS and UMAP results."""
+    
+    # Create figures directory
+    figures_dir = REPO_ROOT / "figures"
+    figures_dir.mkdir(exist_ok=True)
+    
+    # Project to visual field
+    utah_visual = project_to_visual_field(utah_mm, monkey_alias)
+    mds_visual = project_to_visual_field(mds_aligned, monkey_alias)
+    umap_visual = project_to_visual_field(umap_aligned, monkey_alias)
+    
+    # Create 2x3 subplot figure
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12), dpi=150)
+    
+    # Row 1: Cortical space
+    # Plot 1: Ground truth cortical positions
+    ax = axes[0, 0]
+    ax.scatter(utah_mm[:, 0], utah_mm[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title('Ground Truth Cortical Positions', fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (mm)', fontsize=12)
+    ax.set_ylabel('Y (mm)', fontsize=12)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    
+    # Plot 2: MDS recovered cortical positions
+    ax = axes[0, 1]
+    ax.scatter(mds_aligned[:, 0], mds_aligned[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title(f'MDS Recovered (Cortical)\nIEDC={mds_metrics["cortical_corr"]:.3f}, RMSE={mds_metrics["cortical_rmse"]:.2f}mm', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (mm)', fontsize=12)
+    ax.set_ylabel('Y (mm)', fontsize=12)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    
+    # Plot 3: UMAP recovered cortical positions
+    ax = axes[0, 2]
+    ax.scatter(umap_aligned[:, 0], umap_aligned[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    title_text = (f'UMAP Recovered (Cortical)\n'
+                  f'{best_candidate["freq_band"]}, n={best_candidate["n_neighbors"]}, d={best_candidate["min_dist"]:.1f}\n'
+                  f'IEDC={umap_metrics["cortical_corr"]:.3f}, RMSE={umap_metrics["cortical_rmse"]:.2f}mm')
+    ax.set_title(title_text, fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (mm)', fontsize=12)
+    ax.set_ylabel('Y (mm)', fontsize=12)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    
+    # Row 2: Visual field space
+    # Compute shared visual field limits
+    all_visual_x = np.concatenate([utah_visual[:, 0], mds_visual[:, 0], umap_visual[:, 0]])
+    all_visual_y = np.concatenate([utah_visual[:, 1], mds_visual[:, 1], umap_visual[:, 1]])
+    visual_xlim = (all_visual_x.min() - 0.5, all_visual_x.max() + 0.5)
+    visual_ylim = (all_visual_y.min() - 0.5, all_visual_y.max() + 0.5)
+    
+    # Plot 4: Ground truth visual field
+    ax = axes[1, 0]
+    ax.scatter(utah_visual[:, 0], utah_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title('Ground Truth Visual Field', fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (deg)', fontsize=12)
+    ax.set_ylabel('Y (deg)', fontsize=12)
+    ax.set_xlim(visual_xlim)
+    ax.set_ylim(visual_ylim)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    
+    # Plot 5: MDS recovered visual field
+    ax = axes[1, 1]
+    ax.scatter(mds_visual[:, 0], mds_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title(f'MDS Recovered (Visual Field)\nIEDC={mds_metrics["visual_corr"]:.3f}, RMSE={mds_metrics["visual_rmse"]:.2f}°', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (deg)', fontsize=12)
+    ax.set_ylabel('Y (deg)', fontsize=12)
+    ax.set_xlim(visual_xlim)
+    ax.set_ylim(visual_ylim)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    
+    # Plot 6: UMAP recovered visual field
+    ax = axes[1, 2]
+    ax.scatter(umap_visual[:, 0], umap_visual[:, 1], c=colors, alpha=0.7, edgecolors='black', s=50, linewidth=0.5)
+    ax.set_title(f'UMAP Recovered (Visual Field)\nIEDC={umap_metrics["visual_corr"]:.3f}, RMSE={umap_metrics["visual_rmse"]:.2f}°', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xlabel('X (deg)', fontsize=12)
+    ax.set_ylabel('Y (deg)', fontsize=12)
+    ax.set_xlim(visual_xlim)
+    ax.set_ylim(visual_ylim)
+    ax.set_aspect('equal')
+    ax.grid(False)
+    ax.set_facecolor('white')
+    
+    # Add overall title
+    fig.suptitle(f'Electrode Mapping Results - {monkey_actual}', fontsize=18, fontweight='bold', y=0.995)
+    
+    plt.tight_layout()
+    
+    # Save figure
+    output_path = figures_dir / f"neumap_results_{monkey_actual}.png"
+    fig.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"✓ Saved figure: {output_path}")
+    plt.close(fig)
 
 
 if __name__ == "__main__":
