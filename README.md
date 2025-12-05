@@ -130,8 +130,8 @@ Tests for neumap_demo_v2.py.
 - **MDS** - Multidimensional Scaling
 
 ### Monkey Data Support
-- **LICK** (Monkey L) - 16 arrays
-- **ASHTON** (Monkey A) - 16 arrays
+- **Monkey L** (Monkey L) - 16 arrays
+- **Monkey A** (Monkey A) - 16 arrays
 
 ### Frequency Bands
 - `LFP` - Local Field Potential (original)
@@ -144,8 +144,8 @@ Tests for neumap_demo_v2.py.
 ### Visual Field Projection
 - Cortex-to-visual field mapping using wedge dipole model
 - Optimized wedge parameters for each monkey:
-  - **LICK**: a=0.5251, b=80.0, k=13.64, alpha=0.774
-  - **ASHTON**: a=0.6857, b=106.0, k=16.69, alpha=0.948
+  - **Monkey L**: a=0.5251, b=80.0, k=13.64, alpha=0.774
+  - **Monkey A**: a=0.6857, b=106.0, k=16.69, alpha=0.948
 - Literature values: a=0.61, b=106, k=13.6, alpha=0.86
 
 ### Performance Evaluation
@@ -165,11 +165,11 @@ The code expects data organized in the following structure:
 ```
 data/
 ├── EYES_CLOSED/
-│   ├── LICK/
+│   ├── Monkey_L/
 │   │   ├── RFS/
 │   │   ├── LFP/
 │   │   └── MUA/
-│   └── ASHTON/
+│   └── Monkey_A/
 │       ├── RFS/
 │       ├── LFP/
 │       └── MUA/
