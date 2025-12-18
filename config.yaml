@@ -1,0 +1,65 @@
+# Data paths configuration for neural electrode mapping analysis
+# Update these paths to match your local data directory structure
+
+# Root data directory
+# Default: C:\Users\Usuario\LFP-RFs\data
+data_root: "LFP-RFs/data"
+
+# Specific data subdirectories (relative to data_root or absolute paths)
+eyes_closed_data: "${data_root}/EYES_CLOSED"
+utah_coordinates: "${data_root}/coordinates_of_electrodes_on_cortex_using_photos_of_arrays"
+channel_area_mapping: "${data_root}/channel_area_mapping/channel_area_mapping.mat"
+deleted_electrodes: "${data_root}/deletedElectrodesDictionary"
+
+# Expected data files per monkey (under EYES_CLOSED/<MONKEY>/)
+# LFP files: <monkey>/LFP/allOrderedLFP_ignore4secs_<freq_band>_<monkey>_outlierChunks_removed.npy
+# MUA files: <monkey>/MUA/allOrderedMUA_binsize_2_ignore4secs_<monkey>_outlierChunks_removed.npy
+# RFS files: <monkey>/RFS/*.mat (RF instances)
+
+# Frequency bands available
+frequency_bands:
+  - LFP        # Local Field Potential (original)
+  - low        # Low frequency
+  - alpha      # Alpha band
+  - beta       # Beta band
+  - gamma      # Gamma band
+  - highGamma  # High gamma band
+
+# Monkey-specific data
+monkeys:
+  monkey_L:
+    full_name: "monkey_L"
+    utah_array_file: "allPixelIDs_monkey_L.mat"
+    pixels_per_mm: 57.0  # Scaling factor
+    utah_max: 512.0      # Maximum pixel value
+    
+  monkey_A:
+    full_name: "monkey_A"
+    utah_array_file: "allPixelIDs_monkey_A.mat"
+    pixels_per_mm: 57.0  # Scaling factor
+    utah_max: 512.0      # Maximum pixel value
+
+# Data structure expected:
+# data_root/
+# ├── channel_area_mapping/
+# │   └── channel_area_mapping.mat
+# ├── coordinates_of_electrodes_on_cortex_using_photos_of_arrays/
+# │   ├── allPixelIDs_monkey_L.mat
+# │   └── allPixelIDs_monkey_A.mat
+# ├── deletedElectrodesDictionary/
+# │   └── subjectCondition_NonvalidElectrodesList.pkl
+# └── EYES_CLOSED/
+#     ├── monkey_A/
+#     │   ├── LFP/
+#     │   │   └── *.npy files (LFP data for different frequency bands)
+#     │   ├── MUA/
+#     │   │   └── *.npy files (Multi-unit activity data)
+#     │   └── RFS/
+#     │       └── *.mat files (Receptive field instances)
+#     └── monkey_L/
+#         ├── LFP/
+#         │   └── *.npy files
+#         ├── MUA/
+#         │   └── *.npy files
+#         └── RFS/
+#             └── *.mat files
